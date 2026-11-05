@@ -800,10 +800,14 @@ func getFirstError(errs []error, allowPartialResponse bool) error {
 
 	// allowPartialResponse == true. Return the error only if all the backends are unavailable
 	// or if some of the backends are improperly configured.
+	hasFullResponse := false
 	for _, err := range errs {
 		if err == nil {
 			// At least a single vlstorage returned full response.
-			return nil
+			// Continue checking the remaining errors, since the errors unrelated to the backend unavailability
+			// must be returned to the client irrespective of the vlstorage node order.
+			hasFullResponse = true
+			continue
 		}
 		if !isUnavailableBackendError(err) {
 			// Return the first error, which isn't related to the backend unavailability, to the client,
@@ -812,6 +816,9 @@ func getFirstError(errs []error, allowPartialResponse bool) error {
 			err = fmt.Errorf("the vlstorage node is available, but it returns an error, which may point to configuration issues: %w", err)
 			return newStatusBadGatewayError(err)
 		}
+	}
+	if hasFullResponse {
+		return nil
 	}
 
 	err := fmt.Errorf("all the vlstorage nodes are unavailable for querying; a sample error: %w", errs[0])
